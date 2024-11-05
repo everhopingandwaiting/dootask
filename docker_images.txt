@@ -1,0 +1,12 @@
+kuaifan/php:swoole-8.0.rc15
+nginx:alpine
+redis:alpine
+mariadb:10.7.3
+onlyoffice/documentserver:7.5.1.1
+kuaifan/fileview:4.2.0-SNAPSHOT-RC25
+jgraph/drawio:20.8.20
+kuaifan/export-server:0.0.1
+kuaifan/minder:0.1.3
+kuaifan/dooapprove:0.1.2
+kuaifan/dooai:0.2.0
+kuaifan/doookr:0.4.3
