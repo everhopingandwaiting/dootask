@@ -167,6 +167,10 @@ class WebSocketDialogMsg extends AbstractModel
                 }
                 break;
 
+            case 'location':
+                $msg['thumb'] = Base::fillUrl($msg['thumb'] ?: "images/other/location.jpg");
+                break;
+
             case 'template':
                 if ($msg['data']['thumb']) {
                     $msg['data']['thumb']['url'] = Base::fillUrl($msg['data']['thumb']['url']);
@@ -582,9 +586,13 @@ class WebSocketDialogMsg extends AbstractModel
                 $action = Doo::translate("语音");
                 return "[{$action}]";
 
+            case 'location':
+                $action = Doo::translate("位置");
+                return "[{$action}] " . Base::cutStr($data['msg']['title'], 50);
+
             case 'meeting':
                 $action = Doo::translate("会议");
-                return "[{$action}] " . Base::cutStr($data['msg']['name'], 30);
+                return "[{$action}] " . Base::cutStr($data['msg']['name'], 50);
 
             case 'file':
                 return self::previewFileMsg($data['msg']);
@@ -602,7 +610,7 @@ class WebSocketDialogMsg extends AbstractModel
                 return "[{$action}] " . self::previewMsg($data['msg']['data']);
 
             case 'notice':
-                return Base::cutStr(Doo::translate($data['msg']['notice']), 30);
+                return Base::cutStr(Doo::translate($data['msg']['notice']), 50);
 
             case 'template':
                 return self::previewTemplateMsg($data['msg']);
@@ -630,14 +638,14 @@ class WebSocketDialogMsg extends AbstractModel
             $text = Base::markdown2html($text);
         }
         $text = preg_replace("/<img\s+class=\"emoticon\"[^>]*?alt=\"(\S+)\"[^>]*?>/", "[$1]", $text);
-        $text = preg_replace("/<img\s+class=\"emoticon\"[^>]*?>/", "[动画表情]", $text);
-        $text = preg_replace("/<img\s+class=\"browse\"[^>]*?>/", "[图片]", $text);
+        $text = preg_replace("/<img\s+class=\"emoticon\"[^>]*?>/", "[" . Doo::translate('动画表情') . "]", $text);
+        $text = preg_replace("/<img\s+class=\"browse\"[^>]*?>/", "[" . Doo::translate('图片') . "]", $text);
         if (!$preserveHtml) {
             $text = str_replace("</p><p>", "</p> <p>", $text);
             $text = strip_tags($text);
             $text = str_replace(["&nbsp;", "&amp;", "&lt;", "&gt;"], [" ", "&", "<", ">"], $text);
             $text = preg_replace("/\s+/", " ", $text);
-            $text = Base::cutStr($text, 30);
+            $text = Base::cutStr($text, 50);
         }
         return $text;
     }
@@ -657,7 +665,7 @@ class WebSocketDialogMsg extends AbstractModel
             return "[{$action}]";
         }
         $action = Doo::translate("文件");
-        return "[{$action}] " . Base::cutStr($msg['name'], 30);
+        return "[{$action}] " . Base::cutStr($msg['name'], 50);
     }
 
     /**
@@ -671,13 +679,13 @@ class WebSocketDialogMsg extends AbstractModel
             return $msg['title_raw'];
         }
         if ($msg['type'] === 'task_list' && count($msg['list']) === 1) {
-            return Doo::translate($msg['title']) . ": " . Base::cutStr($msg['list'][0]['name'], 30);
+            return Doo::translate($msg['title']) . ": " . Base::cutStr($msg['list'][0]['name'], 50);
         }
         if (!empty($msg['title'])) {
             return Doo::translate($msg['title']);
         }
         if ($msg['type'] === 'content' && is_string($msg['content']) && $msg['content'] !== '') {
-            return Base::cutStr(Doo::translate($msg['content']), 30);
+            return Base::cutStr(Doo::translate($msg['content']), 50);
         }
         return Doo::translate('未知的消息');
     }
@@ -957,6 +965,7 @@ class WebSocketDialogMsg extends AbstractModel
     /**
      * 发送消息、修改消息
      * @param string $action            动作
+     * - null：发送消息
      * - reply-98：回复消息ID=98
      * - update-99：更新消息ID=99（标记修改）
      * - change-99：更新消息ID=99（不标记修改）
@@ -993,6 +1002,27 @@ class WebSocketDialogMsg extends AbstractModel
         } elseif ($type === 'file') {
             if (in_array($msg['ext'], ['jpg', 'jpeg', 'webp', 'png', 'gif'])) {
                 $mtype = 'image';
+            }
+        } elseif ($type === 'location') {
+            if (preg_match('/^https*:\/\//', $msg['thumb'])) {
+                $thumb = file_get_contents($msg['thumb']);
+                if (empty($thumb)) {
+                    throw new ApiException('获取地图快照失败');
+                }
+                $fileUrl = "uploads/chat/" . date("Ym") . "/" . $dialog_id . "/" . md5s($msg['thumb']) . ".jpg";
+                $filePath = public_path($fileUrl);
+                Base::makeDir(dirname($filePath));
+                if (!Base::saveContentImage($filePath, $thumb, 90)) {
+                    throw new ApiException('保存地图快照失败');
+                }
+                $imageSize = getimagesize($filePath);
+                if ($imageSize[0] < 20 || $imageSize[1] < 20) {
+                    throw new ApiException('地图快照尺寸太小');
+                }
+                $msg['thumb_original'] = $msg['thumb'];
+                $msg['thumb'] = $fileUrl;
+                $msg['width'] = $imageSize[0];
+                $msg['height'] = $imageSize[1];
             }
         }
         if ($push_silence === null) {

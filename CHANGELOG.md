@@ -2,6 +2,50 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.39.88]
+
+### Bug Fixes
+
+- 翻译聊天内容参数错误
+
+### Performance
+
+- 优化使用默认浏览器打开链接
+- 添加定位签到
+- 优化打开会议
+- 优化打开会话逻辑
+
+## [0.39.73]
+
+### Bug Fixes
+
+- 无法打开项目的情况
+- 搜索特殊字符报错的情况
+
+### Features
+
+- 添加定位签到
+
+### Performance
+
+- 优化从审批点击头像发起会话
+
+## [0.39.66]
+
+### Bug Fixes
+
+- 修复会话内加载待办为空的情况
+
+### Performance
+
+- 图片浏览
+- 优化会话搜索
+- 优化国际化语言
+- 优化消息已读逻辑
+- 优化app新版本提示
+- 优化文字头像
+- 优化修改任务load
+
 ## [0.39.52]
 
 ### Bug Fixes

@@ -832,6 +832,7 @@ export default {
             scrollToBottomRefresh: false,       // 滚动到底部重新获取消息
             androidKeyboardVisible: false,      // Android键盘是否可见
             replyMsgAutoMention: false,         // 允许回复消息后自动@
+            waitUnreadData: {},                 // 等待未读数据
         }
     },
 
@@ -1215,7 +1216,7 @@ export default {
 
         dialogId: {
             handler(dialog_id, old_id) {
-                this.getDialogBase(dialog_id)
+                this.getDialogBase(dialog_id, old_id)
                 //
                 this.$store.dispatch('closeDialog', old_id)
                 //
@@ -1449,8 +1450,22 @@ export default {
         /**
          * 获取会话基本信息
          * @param dialog_id
+         * @param old_id
          */
-        getDialogBase(dialog_id) {
+        getDialogBase(dialog_id, old_id = null) {
+            if (old_id) {
+                const ens = []
+                const ids = this.allMsgs.filter(item => item.read_at === null && item.userid != this.userId).map(item => item.id)
+                const enters = this.$refs.scroller?.$el.querySelectorAll('.item-enter') || []
+                for (const enter of enters) {
+                    const id = $A.runNum(enter.querySelector(".dialog-view")?.getAttribute('data-id'));
+                    if (id && !ids.includes(id)) {
+                        ids.push(id)
+                    }
+                }
+                this.waitUnreadData[old_id] = $A.getLastSameElements(ids, ens)
+            }
+
             if (!dialog_id) {
                 return
             }
@@ -1473,9 +1488,19 @@ export default {
                 dialog_id,
                 msg_id: this.msgId,
                 msg_type: this.msgType,
-            }).then(_ => {
+            }).then(({data}) => {
                 this.openId = dialog_id
                 this.msgPrepared = true
+                //
+                if (this.dialogId !== dialog_id) {
+                    let unreadIds = this.waitUnreadData[dialog_id] || []
+                    if (unreadIds.length > 0) {
+                        const ids = [...data.list.map(item => item.id)].reverse();
+                        $A.getLastSameElements(unreadIds, ids).forEach(id => {
+                            this.$store.dispatch("dialogMsgRead", {id, dialog_id})
+                        })
+                    }
+                }
                 //
                 setTimeout(_ => {
                     this.onSearchMsgId()
@@ -1698,10 +1723,71 @@ export default {
         },
 
         /**
+         * 发送位置消息
+         * @param data
+         */
+        sendLocationMsg(data) {
+            this.$store.dispatch("call", {
+                url: 'dialog/msg/sendlocation',
+                data: Object.assign(data, {
+                    dialog_id: this.dialogId,
+                }),
+                spinner: true,
+                method: 'post',
+            }).then(({data}) => {
+                this.sendSuccess(data)
+            }).catch(({msg}) => {
+                $A.modalConfirm({
+                    icon: 'error',
+                    title: '发送失败',
+                    content: msg,
+                    cancelText: '取消发送',
+                    okText: '重新发送',
+                    onOk: _ => {
+                        this.sendLocationMsg(data)
+                    },
+                })
+            });
+        },
+
+        /**
          * 发送快捷消息
          * @param item
          */
         sendQuick(item) {
+            if (item.key === "locat-checkin") {
+                this.$store.dispatch('openAppMapPage', {
+                    key: item.config.key,
+                    point: `${item.config.lng},${item.config.lat}`,
+                }).then(data => {
+                    if (!$A.isJson(data)) {
+                        return
+                    }
+                    if (data.distance > item.config.radius) {
+                        $A.modalError(`你选择的位置「${data.title}」不在签到范围内`)
+                        return
+                    }
+                    const thumb = $A.urlAddParams('https://api.map.baidu.com/staticimage/v2', {
+                        ak: item.config.key,
+                        center: `${data.point.lng},${data.point.lat}`,
+                        markers: `${data.point.lng},${data.point.lat}`,
+                        width: 800,
+                        height: 480,
+                        zoom: 19,
+                        copyright: 1,
+                    })
+                    this.sendLocationMsg({
+                        type: 'bd',
+                        lng: data.point.lng,
+                        lat: data.point.lat,
+                        title: data.title,
+                        distance: data.distance,
+                        address: data.address || '',
+                        thumb
+                    })
+                })
+                return;
+            }
             this.sendMsg(`<p><span data-quick-key="${item.key}">${item.label}</span></p>`)
         },
 
@@ -3152,8 +3238,7 @@ export default {
                         this.onViewPicture(target.currentSrc);
                     } else {
                         const list = $A.getTextImagesInfo(el.outerHTML)
-                        const index = list.findIndex(item => item.src == target.currentSrc)
-                        this.$store.dispatch("previewImage", {index, list})
+                        this.$store.dispatch("previewImage", {index: target.currentSrc, list})
                     }
                     break;
 
@@ -3238,9 +3323,12 @@ export default {
             const {msg} = data;
             if (msg.ext === 'mp4') {
                 this.$store.dispatch("previewImage", {
-                    src: msg.path,
-                    width: msg.width,
-                    height: msg.height,
+                    index: 0,
+                    list: [{
+                        src: msg.path,
+                        width: msg.width,
+                        height: msg.height,
+                    }]
                 })
                 return
             }
@@ -3305,12 +3393,7 @@ export default {
                 }
             })
             //
-            const index = list.findIndex(({src}) => src === currentUrl);
-            if (index > -1) {
-                this.$store.dispatch("previewImage", {index, list})
-            } else {
-                this.$store.dispatch("previewImage", currentUrl)
-            }
+            this.$store.dispatch("previewImage", {index: currentUrl, list})
         },
 
         onDownFile(data) {

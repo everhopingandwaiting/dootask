@@ -7,6 +7,9 @@
         <!--任务操作-->
         <TaskOperation/>
 
+        <!--会议管理-->
+        <MeetingManager/>
+
         <!--下拉菜单-->
         <DropdownMenu/>
 
@@ -43,11 +46,16 @@ import PreviewImageState from "./components/PreviewImage/state";
 import NetworkException from "./components/NetworkException";
 import GuidePage from "./components/GuidePage";
 import TaskOperation from "./pages/manage/components/TaskOperation";
+import MeetingManager from "./pages/manage/components/MeetingManager";
 import DropdownMenu from "./components/DropdownMenu";
+import {ctrlPressed} from "./mixins/ctrlPressed";
 import {mapState} from "vuex";
 
 export default {
+    mixins: [ctrlPressed],
+
     components: {
+        MeetingManager,
         DropdownMenu,
         TaskOperation,
         NetworkException,
@@ -62,6 +70,7 @@ export default {
             routePath: null,
             appInter: null,
             countDown: Math.min(30, 60 - $A.daytz().second()),
+            lastCheckUpgradeYmd: $A.daytz().format('YYYY-MM-DD')
         }
     },
 
@@ -264,19 +273,64 @@ export default {
         },
 
         isUseDefaultBrowser(url) {
-            if (/web\.zoom\.us/i.test(url)
-                || /meeting\.tencent\.com/i.test(url)
-                || /meet\.google\.com/i.test(url)) {
+            // 按下Ctrl|Command键打开
+            if (this.isCtrlCommandPressed) {
                 return true;
             }
+            // 常见会议链接
+            if (this.isMeetingUrlStrict(url)) {
+                return true;
+            }
+            // 同域名规则
             if ($A.getDomain(url) == $A.getDomain($A.mainUrl())) {
                 try {
-                    if (/^\/uploads\//i.test(new URL(url).pathname)) {
+                    const {pathname, searchParams} = new URL(url);
+                    // uploads/                    上传文件
+                    // api/dialog/msg/download     会话文件
+                    // api/project/task/filedown   任务文件
+                    if (/^\/(uploads|api\/dialog\/msg\/download|api\/project\/task\/filedown)/.test(pathname)) {
+                        return true;
+                    }
+                    // api/file/content?down=yes   文件下载
+                    if (/^\/api\/file\/content/.test(pathname) && searchParams.get('down') === 'yes') {
                         return true;
                     }
                 } catch (e) { }
             }
             return false;
+        },
+
+        isMeetingUrlStrict(url) {
+            const meetingDomains = [
+                // 国际主流
+                'web.zoom.us',
+                'meeting.tencent.com',
+                'meet.google.com',
+                'teams.microsoft.com',
+                'join.skype.com',
+                'bluejeans.com',
+                'webex.com',
+                'voovmeeting.com',
+
+                // 中国区
+                'meeting.feishu.cn',
+                'meeting.dingtalk.com',
+                'jitsi.baidu.com',
+
+                // 其他国际
+                'whereby.com',
+                'meet.jit.si',
+                'gotomeeting.com',
+                '8x8.vc',
+                'lifesize.com',
+                'starleaf.com',
+
+                // 教育和企业
+                'classroomscreen.com',
+                'bigbluebutton.org'
+            ];
+            const lowerUrl = `${url}`.toLowerCase()
+            return meetingDomains.some(domain => lowerUrl.indexOf(domain) !== -1);
         },
 
         electronEvents() {
@@ -331,6 +385,10 @@ export default {
                 this.autoTheme()
                 $A.updateTimezone()
                 $A.IDBTest()
+                if (this.lastCheckUpgradeYmd != $A.daytz().format('YYYY-MM-DD')) {
+                    this.lastCheckUpgradeYmd = $A.daytz().format('YYYY-MM-DD')
+                    $A.eeuiAppCheckUpdate();
+                }
             }
             // 页面失活
             window.__onPagePause = () => {
@@ -364,22 +422,25 @@ export default {
                 })
             }
             // 会议事件
-            window.__onMeetingEvent = ({act,uuid,meetingid}) => {
-                switch (act) {
+            window.__onMeetingEvent = (event) => {
+                if (!$A.isJson(event)) {
+                    return;
+                }
+                switch (event.act) {
                     // 获取用户信息
                     case "getInfo":
-                        const isTourist = (uuid+'').indexOf('88888') !== -1;
+                        const isTourist = (event.uuid + '').indexOf('88888') !== -1;
                         this.$store.dispatch("call", {
                             url: isTourist ? 'users/meeting/tourist' : 'users/basic',
                             data: {
-                                userid: isTourist ? uuid : (uuid+'').substring(6),
-                                tourist_id: uuid,
+                                userid: isTourist ? event.uuid : (event.uuid + '').substring(6),
+                                tourist_id: event.uuid,
                             }
                         }).then(({data}) => {
                             $A.eeuiAppSendMessage({
                                 action: 'updateMeetingInfo',
                                 infos: {
-                                    uuid: uuid,
+                                    uuid: event.uuid,
                                     avatar: isTourist ? data?.userimg : data[0]?.userimg,
                                     username: isTourist ? data?.nickname : data[0]?.nickname,
                                 }
@@ -388,34 +449,44 @@ export default {
                             $A.modalError(msg);
                         });
                         break;
-                    //加入成功
+                    // 加入成功
                     case "success":
-                        this.$store.dispatch("closeMeetingWindow","add")
+                        this.$store.dispatch("closeMeetingWindow", "add")
                         break;
                     // 邀请
                     case "invent":
-                        this.$store.dispatch("showMeetingWindow",{
+                        this.$store.dispatch("showMeetingWindow", {
                             type: "invitation",
-                            meetingid: meetingid
+                            meetingid: event.meetingid
                         })
                         break;
-                    //结束会议
+                    // 结束会议
                     case "endMeeting":
                         break;
-                    //加入失败
+                    // 加入失败
                     case "error":
-                        this.$store.dispatch("closeMeetingWindow","error")
+                        this.$store.dispatch("closeMeetingWindow", "error")
+                        break;
+                    // 状态
+                    case "status":
+                        this.$store.state.appMeetingShow = event.status
                         break;
                     default:
                         break;
                 }
             }
             // 键盘状态
-            window.__onKeyboardStatus = (data) => {
-                const message = $A.jsonParse(decodeURIComponent(data));
-                this.$store.state.keyboardType = message.keyboardType;
-                this.$store.state.keyboardHeight = message.keyboardHeight;
-                this.$store.state.safeAreaBottom = message.safeAreaBottom;
+            window.__onKeyboardStatus = (event) => {
+                if (!$A.isJson(event)) {
+                    // 兼容旧版本
+                    event = $A.jsonParse(decodeURIComponent(event));
+                }
+                if (!$A.isJson(event)) {
+                    return;
+                }
+                this.$store.state.keyboardType = event.keyboardType;
+                this.$store.state.keyboardHeight = event.keyboardHeight;
+                this.$store.state.safeAreaBottom = event.safeAreaBottom;
             }
             // 通知权限
             window.__onNotificationPermissionStatus = (ret) => {
@@ -434,8 +505,12 @@ export default {
             // 取消长按振动
             $A.eeuiAppSetHapticBackEnabled(false)
             // 设置语言
-            $A.eeuiAppSetVariate("languageWebBrowser", this.$L("浏览器打开"))
-            $A.eeuiAppSetVariate("languageWebRefresh", this.$L("刷新"))
+            $A.eeuiAppSetCachesString("languageWebBrowser", this.$L("浏览器打开"))
+            $A.eeuiAppSetCachesString("languageWebRefresh", this.$L("刷新"))
+            $A.eeuiAppSetCachesString("updateDefaultTitle", this.$L("发现新版本"))
+            $A.eeuiAppSetCachesString("updateDefaultContent", this.$L("暂无更新介绍！"))
+            $A.eeuiAppSetCachesString("updateDefaultCancelText", this.$L("以后再说"))
+            $A.eeuiAppSetCachesString("updateDefaultUpdateText", this.$L("立即更新"))
         },
 
         otherEvents() {

@@ -63,6 +63,22 @@ class BotReceiveMsgTask extends AbstractTask
      */
     private function botManagerReceive(WebSocketDialogMsg $msg, User $botUser)
     {
+        // 位置消息
+        if ($msg->type === 'location') {
+            // 签到机器人
+            if ($botUser->email === 'check-in@bot.system') {
+                $content = UserBot::checkinBotQuickMsg('locat-checkin', $msg->userid, $msg->msg);
+                if ($content) {
+                    WebSocketDialogMsg::sendMsg(null, $msg->dialog_id, 'template', [
+                        'type' => 'content',
+                        'content' => $content,
+                    ], $botUser->userid, false, false, true);    // todo 未能在任务end事件来发送任务
+                }
+            }
+            return;
+        }
+
+        // 文本消息
         if ($msg->type !== 'text') {
             return;
         }
@@ -322,6 +338,7 @@ class BotReceiveMsgTask extends AbstractTask
                             ->join('web_socket_dialogs as d', 'u.dialog_id', '=', 'd.id')
                             ->where('u.userid', $data->userid)
                             ->where('d.name', 'LIKE', "%{$nameKey}%")
+                            ->whereNull('d.deleted_at')
                             ->orderByDesc('u.top_at')
                             ->orderByDesc('u.last_at')
                             ->take(20)

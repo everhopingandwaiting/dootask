@@ -70,7 +70,7 @@
                     <TimelineItem :key="key" v-if="item.type == 'starter'" color="green">
                         <p class="timeline-title">{{$L('提交')}}</p>
                         <div class="timeline-body">
-                            <div class="approve-process-avatar" @click="onAvatar(data.start_user_id)">
+                            <div class="approve-process-avatar" @click="onAvatar(data.start_user_id || datas.start_user_id)">
                                 <Avatar :src="data.userimg || datas.userimg" size="38"/>
                             </div>
                             <div class="approve-process-left">
@@ -91,13 +91,15 @@
                         :color="item.identitylink ? (item.identitylink?.state > 1 ? '#f03f3f' :'green') : '#ccc'">
                         <p class="timeline-title">{{$L('审批')}}</p>
                         <div class="timeline-body">
-                            <div class="approve-process-avatar" @click="onAvatar(item.node_user_list && item.node_user_list[0]?.target_id)">
+                            <div class="approve-process-avatar" @click="onAvatar(item.node_user_list && item.node_user_list[0]?.target_id || item.aprover_id)">
                                 <Avatar :src="(item.node_user_list && item.node_user_list[0]?.userimg) || item.userimg" size="38"/>
                             </div>
                             <div class="approve-process-left">
                                 <p class="approve-process-name">{{item.approver}}</p>
-                                <p class="approve-process-state" style="color: #6d6d6d;" v-if="!item.identitylink">待审批</p>
-                                <p class="approve-process-state" v-if="item.identitylink">
+                                <p v-if="!item.identitylink" class="approve-process-state">
+                                    <span style="color:#6d6d6d;">{{$L('待审批')}}</span>
+                                </p>
+                                <p v-else class="approve-process-state">
                                     <span v-if="item.identitylink.state==0" style="color:#496dff;">{{$L('审批中')}}</span>
                                     <span v-if="item.identitylink.state==1" >{{$L('已通过')}}</span>
                                     <span v-if="item.identitylink.state==2" style="color:#f03f3f;">{{$L('已拒绝')}}</span>
@@ -507,8 +509,7 @@ export default {
                     src: $A.mainUrl(src)
                 }
             });
-            const index = list.findIndex(({src}) => src === $A.mainUrl(currentUrl));
-            this.$store.dispatch("previewImage", {index, list})
+            this.$store.dispatch("previewImage", {index: $A.mainUrl(currentUrl), list})
         },
         // 点击头像
         onAvatar(userid) {
@@ -516,6 +517,9 @@ export default {
                 return
             }
             this.$store.dispatch("openDialogUserid", userid).then(_ => {
+                if (this.$parent.$options.name === "DrawerOverlayView") {
+                    this.$parent.onClose()
+                }
                 this.goForward({name: 'manage-messenger'})
             }).catch(({msg}) => {
                 $A.modalError(msg)

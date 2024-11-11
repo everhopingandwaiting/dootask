@@ -8,6 +8,7 @@ use App\Module\Base;
 use App\Module\Doo;
 use Cache;
 use Carbon\Carbon;
+use Request;
 
 /**
  * App\Models\User
@@ -35,6 +36,7 @@ use Carbon\Carbon;
  * @property \Illuminate\Support\Carbon|null $disable_at
  * @property int|null $email_verity 邮箱是否已验证
  * @property int|null $bot 是否机器人
+ * @property string|null $lang 语言首选项
  * @property \Illuminate\Support\Carbon|null $created_at
  * @property \Illuminate\Support\Carbon|null $updated_at
  * @method static \Illuminate\Database\Eloquent\Builder|AbstractModel cancelAppend()
@@ -58,6 +60,7 @@ use Carbon\Carbon;
  * @method static \Illuminate\Database\Eloquent\Builder|User whereEmailVerity($value)
  * @method static \Illuminate\Database\Eloquent\Builder|User whereEncrypt($value)
  * @method static \Illuminate\Database\Eloquent\Builder|User whereIdentity($value)
+ * @method static \Illuminate\Database\Eloquent\Builder|User whereLang($value)
  * @method static \Illuminate\Database\Eloquent\Builder|User whereLastAt($value)
  * @method static \Illuminate\Database\Eloquent\Builder|User whereLastIp($value)
  * @method static \Illuminate\Database\Eloquent\Builder|User whereLineAt($value)
@@ -446,6 +449,12 @@ class User extends AbstractModel
             if (Carbon::parse($user->line_at)->addSeconds(30)->lt(Carbon::now())) {
                 $upArray['line_at'] = Carbon::now();
             }
+            if (empty($user->lang) || Request::hasHeader('language')) {
+                $lang = Request::header('language');
+                if (Doo::checkLanguage($lang) && $user->lang != $lang) {
+                    $upArray['lang'] = $lang;
+                }
+            }
             if ($upArray) {
                 $user->updateInstance($upArray);
                 $user->save();
@@ -486,7 +495,7 @@ class User extends AbstractModel
      * @param int $userid 会员ID
      * @return self
      */
-    public static function userid2basic($userid)
+    public static function userid2basic($userid, $addField = [])
     {
         global $_A;
         if (empty($userid)) {
@@ -496,7 +505,7 @@ class User extends AbstractModel
         if (isset($_A["__static_userid2basic_" . $userid])) {
             return $_A["__static_userid2basic_" . $userid];
         }
-        $userInfo = self::whereUserid($userid)->select(User::$basicField)->first();
+        $userInfo = self::whereUserid($userid)->select(array_merge(User::$basicField, $addField))->first();
         if ($userInfo) {
             $userInfo->online = $userInfo->getOnlineStatus();
             $userInfo->department_name = $userInfo->getDepartmentName();

@@ -970,6 +970,47 @@ export default {
     },
 
     /**
+     * 打开地图选位置（App）
+     * @param dispatch
+     * @param objects {{key: string, point: string}}
+     * @returns {Promise<unknown>}
+     */
+    openAppMapPage({dispatch}, objects) {
+        return new Promise(resolve => {
+            const params = {
+                title: $A.L("定位签到"),
+                label: $A.L("选择附近地点"),
+                placeholder: $A.L("搜索地点"),
+                noresult: $A.L("附近没有找到地点"),
+                errtip: $A.L("定位失败"),
+                selectclose: "true",
+                channel: $A.randomString(6)
+            }
+            $A.eeuiAppSetVariate(`location::${params.channel}`, "");
+            const url = $A.urlAddParams($A.eeuiAppRewriteUrl('../public/tools/map/index.html'), Object.assign(params, objects || {}))
+            dispatch('openAppChildPage', {
+                pageType: 'app',
+                pageTitle: params.title,
+                url: 'web.js',
+                params: {
+                    titleFixed: true,
+                    allowAccess: true,
+                    url
+                },
+                callback: ({status}) => {
+                    if (status === 'pause') {
+                        const data = $A.jsonParse($A.eeuiAppGetVariate(`location::${params.channel}`));
+                        if (data.point) {
+                            $A.eeuiAppSetVariate(`location::${params.channel}`, "");
+                            resolve(data);
+                        }
+                    }
+                }
+            })
+        })
+    },
+
+    /**
      * 打开子窗口（客户端）
      * @param dispatch
      * @param params
@@ -1150,7 +1191,7 @@ export default {
             }
             //
             state.cacheDialogs.some(dialog => {
-                if (dialog.type == 'group' && dialog.group_type == 'project' && dialog.group_info.id == data.id) {
+                if (dialog.type == 'group' && dialog.group_type == 'project' && dialog.group_info && dialog.group_info.id == data.id) {
                     if (data.name !== undefined) {
                         dialog.name = data.name
                     }
@@ -1547,7 +1588,7 @@ export default {
                 if (dialog.name === undefined || dialog.dialog_delete === 1) {
                     return false;
                 }
-                if (dialog.type == 'group' && dialog.group_type == 'task' && dialog.group_info.id == data.id) {
+                if (dialog.type == 'group' && dialog.group_type == 'task' && dialog.group_info && dialog.group_info.id == data.id) {
                     if (data.name !== undefined) {
                         dialog.name = data.name
                     }
@@ -3474,8 +3515,16 @@ export default {
     /**
      * 隐藏全局浮窗加载器
      * @param state
+     * @param dispatch
+     * @param delay
      */
-    hiddenSpinner({state}) {
+    hiddenSpinner({state, dispatch}, delay) {
+        if (typeof delay === "number") {
+            setTimeout(_ => {
+                dispatch("hiddenSpinner")
+            }, delay)
+            return
+        }
         const item = state.floatSpinnerTimer.shift()
         if (item) {
             clearTimeout(item.timer)
@@ -3487,11 +3536,25 @@ export default {
     /**
      * 预览图片
      * @param state
-     * @param data
+     * @param data {{index: number | string, list: array} | string}
      */
     previewImage({state}, data) {
-        if (!$A.isJson(data) || !$A.isArray(data.list)) {
-            data = {index:0, list: [data]}
+        if (!$A.isJson(data)) {
+            data = {index: 0, list: [data]}
+        }
+        data.list = data.list.map(item => {
+            if ($A.isJson(item)) {
+                item.src = $A.thumbRestore(item.src)
+            } else {
+                item = $A.thumbRestore(item)
+            }
+            return item
+        })
+        if (typeof data.index === "string") {
+            const current = $A.thumbRestore(data.index)
+            data.index = Math.max(0, data.list.findIndex(item => {
+                return $A.isJson(item) ? item.src == current : item == current
+            }))
         }
         state.previewImageIndex = data.index;
         state.previewImageList = data.list;
@@ -4138,19 +4201,12 @@ export default {
     /**
      * 显示会议窗口
      * @param state
-     * @param type
-     * @param meetingid
-     * @param meetingdisabled
-     * @param meetingSharekey
+     * @param data
      */
-    showMeetingWindow({state}, {type, meetingid, meetingdisabled, meetingSharekey}) {
-        state.meetingWindow = {
-            show: true,
-            type: type,
-            meetingid: meetingid,
-            meetingdisabled: meetingdisabled,
-            meetingSharekey: meetingSharekey
-        };
+    showMeetingWindow({state}, data) {
+        state.meetingWindow = Object.assign(data, {
+            show: data.type !== 'direct',
+        });
     },
 
     /** *****************************************************************************************/

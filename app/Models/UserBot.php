@@ -91,79 +91,103 @@ class UserBot extends AbstractModel
      */
     public static function quickMsgs($email)
     {
-        return match ($email) {
-            'check-in@bot.system' => [
-                [
-                    'key' => 'checkin',
-                    'label' => Doo::translate('我要打卡')
-                ], /*[
-                    'key' => 'it',
-                    'label' => Doo::translate('IT资讯')
-                ], [
-                    'key' => '36ke',
-                    'label' => Doo::translate('36氪')
-                ], [
-                    'key' => '60s',
-                    'label' => Doo::translate('60s读世界')
-                ], [
-                    'key' => 'joke',
-                    'label' => Doo::translate('开心笑话')
-                ], [
-                    'key' => 'soup',
-                    'label' => Doo::translate('心灵鸡汤')
-                ]*/
-            ],
-            'anon-msg@bot.system' => [
-                [
-                    'key' => 'help',
-                    'label' => Doo::translate('使用说明')
-                ], [
-                    'key' => 'privacy',
-                    'label' => Doo::translate('隐私说明')
-                ],
-            ],
-            'bot-manager@bot.system' => [
-                [
-                    'key' => '/help',
-                    'label' => Doo::translate('帮助指令')
-                ], [
-                    'key' => '/api',
-                    'label' => Doo::translate('API接口文档')
-                ], [
-                    'key' => '/list',
-                    'label' => Doo::translate('我的机器人')
-                ],
-            ],
-            'ai-openai@bot.system',
-            'ai-claude@bot.system',
-            'ai-wenxin@bot.system',
-            'ai-gemini@bot.system',
-            'ai-zhipu@bot.system',
-            'ai-qianwen@bot.system' => [
-                [
-                    'key' => '%3A.clear',
-                    'label' => Doo::translate('清空上下文')
-                ]
-            ],
-            default => [],
-        };
+        switch ($email) {
+            case 'check-in@bot.system':
+                $menu = [
+                    /*[
+                        'key' => 'it',
+                        'label' => Doo::translate('IT资讯')
+                    ], [
+                        'key' => '36ke',
+                        'label' => Doo::translate('36氪')
+                    ], [
+                        'key' => '60s',
+                        'label' => Doo::translate('60s读世界')
+                    ], [
+                        'key' => 'joke',
+                        'label' => Doo::translate('开心笑话')
+                    ], [
+                        'key' => 'soup',
+                        'label' => Doo::translate('心灵鸡汤')
+                    ]*/
+                ];
+                $setting = Base::setting('checkinSetting');
+                if ($setting['open'] !== 'open') {
+                    return $menu;
+                }
+                if (in_array('locat', $setting['modes']) && Base::isEEUIApp()) {
+                    $menu[] = [
+                        'key' => 'locat-checkin',
+                        'label' => Doo::translate('定位签到'),
+                        'config' => [
+                            'key' => $setting['locat_bd_lbs_key'],
+                            'lng' => $setting['locat_bd_lbs_point']['lng'],
+                            'lat' => $setting['locat_bd_lbs_point']['lat'],
+                            'radius' => $setting['locat_bd_lbs_point']['radius'],
+                        ]
+                    ];
+                }
+                if (in_array('manual', $setting['modes'])) {
+                    $menu[] = [
+                        'key' => 'manual-checkin',
+                        'label' => Doo::translate('手动签到')
+                    ];
+                }
+                return $menu;
 
+            case 'anon-msg@bot.system':
+                return [
+                    [
+                        'key' => 'help',
+                        'label' => Doo::translate('使用说明')
+                    ], [
+                        'key' => 'privacy',
+                        'label' => Doo::translate('隐私说明')
+                    ],
+                ];
+
+            case 'bot-manager@bot.system':
+                return [
+                    [
+                        'key' => '/help',
+                        'label' => Doo::translate('帮助指令')
+                    ], [
+                        'key' => '/api',
+                        'label' => Doo::translate('API接口文档')
+                    ], [
+                        'key' => '/list',
+                        'label' => Doo::translate('我的机器人')
+                    ],
+                ];
+
+            default:
+                if (preg_match('/^ai-(.*?)@bot.system$/', $email)) {
+                    return [
+                        [
+                            'key' => '%3A.clear',
+                            'label' => Doo::translate('清空上下文')
+                        ]
+                    ];
+                }
+                return [];
+        }
     }
 
     /**
      * 签到机器人
      * @param $command
      * @param $userid
+     * @param $extra
      * @return string
      */
-    public static function checkinBotQuickMsg($command, $userid)
+    public static function checkinBotQuickMsg($command, $userid, $extra = [])
     {
         if (Cache::get("UserBot::checkinBotQuickMsg:{$userid}") === "yes") {
             return "操作频繁！";
         }
         Cache::put("UserBot::checkinBotQuickMsg:{$userid}", "yes", Carbon::now()->addSecond());
         //
-        if ($command === 'checkin') {
+        if ($command === 'manual-checkin') {
             $setting = Base::setting('checkinSetting');
             if ($setting['open'] !== 'open') {
                 return '暂未开启签到功能。';
@@ -171,7 +195,27 @@ class UserBot extends AbstractModel
             if (!in_array('manual', $setting['modes'])) {
                 return '暂未开放手动签到。';
             }
-            if ($error = UserBot::checkinBotCheckin($userid, Base::time(), true)) {
+            if ($error = UserBot::checkinBotCheckin('manual-' . $userid, Base::time(), true)) {
+                return $error;
+            }
+            return null;
+        } elseif ($command === 'locat-checkin') {
+            $setting = Base::setting('checkinSetting');
+            if ($setting['open'] !== 'open') {
+                return '暂未开启签到功能。';
+            }
+            if (!in_array('locat', $setting['modes'])) {
+                return '暂未开放定位签到。';
+            }
+            if (empty($extra)) {
+                return '当前客户端版本低（所需版本≥v0.39.75）。';
+            }
+            if ($extra['type'] === 'bd') {
+                // todo 判断距离
+            } else {
+                return '错误的定位签到。';
+            }
+            if ($error = UserBot::checkinBotCheckin('locat-' . $userid, Base::time(), true)) {
                 return $error;
             }
             return null;
@@ -182,7 +226,9 @@ class UserBot extends AbstractModel
 
     /**
      * 签到机器人签到
-     * @param $mac
+     * @param mixed $mac
+     * - 多个使用,分隔
+     * - 支持：mac地址、(manual|locat|face|checkin)-userid
      * @param $time
      * @param bool $alreadyTip  签到过是否提示
      * @return string|null 返回string表示错误信息，返回null表示签到成功
@@ -222,7 +268,15 @@ class UserBot extends AbstractModel
                         'remark' => $UserCheckinMac->remark,
                     ];
                 }
-            } elseif (Base::isNumber($mac)) {
+            } elseif (preg_match('/^(manual|locat|face|checkin)-(\d+)$/i', $mac, $match)) {
+                $type = str_replace('checkin', 'face', $match[1]);
+                $mac = intval($match[2]);
+                $remark = match ($type) {
+                    'manual' => $setting['manual_remark'] ?: 'Manual',
+                    'locat' => $setting['locat_remark'] ?: 'Location',
+                    'face' => $setting['face_remark'] ?: 'Machine',
+                    default => '',
+                };
                 if ($UserInfo = User::whereUserid($mac)->whereBot(0)->first()) {
                     $array = [
                         'userid' => $UserInfo->userid,
@@ -231,20 +285,7 @@ class UserBot extends AbstractModel
                     ];
                     $checkins[] = [
                         'userid' => $UserInfo->userid,
-                        'remark' => $setting['manual_remark'] ?: 'Manual',
-                    ];
-                }
-            } elseif (Base::leftExists($mac, "checkin-", true)) {
-                $mac = Base::leftDelete($mac, "checkin-", true);
-                if ($UserInfo = User::whereUserid($mac)->whereBot(0)->first()) {
-                    $array = [
-                        'userid' => $UserInfo->userid,
-                        'mac' => '00:00:00:00:00:00',
-                        'date' => $nowDate,
-                    ];
-                    $checkins[] = [
-                        'userid' => $UserInfo->userid,
-                        'remark' => $setting['face_remark'] ?: 'Machine',
+                        'remark' => $remark,
                     ];
                 }
             }
@@ -260,14 +301,15 @@ class UserBot extends AbstractModel
         }
         //
         if ($checkins && $botUser = User::botGetOrCreate('check-in')) {
-            $getJokeSoup = function($type) {
+            $getJokeSoup = function($type, $userid) {
                 $pre = $type == "up" ? "每日开心：" : "心灵鸡汤：";
                 $key = $type == "up" ? "jokes" : "soups";
                 $array = Base::json2array(Cache::get(JokeSoupTask::keyName($key)));
                 if ($array) {
                     $item = $array[array_rand($array)];
                     if ($item) {
-                        return $pre . $item;
+                        Doo::setLanguage($userid);
+                        return Doo::translate($pre . $item);
                     }
                 }
                 return null;
@@ -291,7 +333,7 @@ class UserBot extends AbstractModel
                 if ($dialog = WebSocketDialog::checkUserDialog($botUser, $checkin['userid'])) {
                     $hi = date("H:i");
                     $remark = $checkin['remark'] ? " ({$checkin['remark']})": "";
-                    $subcontent = $getJokeSoup($type);
+                    $subcontent = $getJokeSoup($type, $checkin['userid']);
                     $title = "{$typeContent}打卡成功，打卡时间: {$hi}{$remark}";
                     WebSocketDialogMsg::sendMsg(null, $dialog->id, 'template', [
                         'type' => 'content',
