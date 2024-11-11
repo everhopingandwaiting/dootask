@@ -491,6 +491,11 @@ export default {
                     "name": "导图",
                 },
                 {
+                    "value": "mind2",
+                    "label": "思维导图2",
+                    "name": "导图2",
+                },
+                {
                     "value": "word",
                     "label": "Word 文档",
                     "name": "Word",
@@ -811,7 +816,7 @@ export default {
                 return (file.type == 'folder' ? 'a' : 'b') + file.name;
             }));
             return list.map(item => {
-                item._checked = selectIds.includes(item.id)
+            item._checked = selectIds.includes(item.id)
                 return item;
             })
         },

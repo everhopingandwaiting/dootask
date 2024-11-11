@@ -7,6 +7,7 @@ use App\Models\User;
 use Cache;
 use Carbon\Carbon;
 use FFI;
+use Log;
 
 class Doo
 {
@@ -225,6 +226,9 @@ class Doo
     public static function userCreate($email, $password): User|null
     {
         $data = Base::json2array(self::string(self::doo()->userCreate($email, $password)));
+        echo "echo reg data:";
+        print $data;
+        Log::info($data);
         if (Base::isError($data)) {
             throw new ApiException($data['msg'] ?: '注册失败');
         }

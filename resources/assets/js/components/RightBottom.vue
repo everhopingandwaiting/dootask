@@ -4,7 +4,7 @@
             <Icon type="ios-globe-outline"/>
             {{ $L('使用 SSO 登录') }}
         </div>
-        <template v-if="showDown">
+        <!-- <template v-if="showDown">
             <a v-if="downloadUrl" class="common-right-bottom-link" :href="downloadUrl" target="_blank">
                 <Icon type="md-download"/>
                 {{ $L('客户端下载') }}
@@ -13,7 +13,7 @@
                 <Icon type="md-download"/>
                 {{ $L('更新客户端') }}
             </div>
-        </template>
+        </template> -->
         <a v-if="showPrivacy" class="common-right-bottom-link" target="_blank" :href="$A.apiUrl('privacy')">
             《{{ $L('隐私政策') }}》
         </a>

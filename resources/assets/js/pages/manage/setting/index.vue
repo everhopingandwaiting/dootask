@@ -95,12 +95,12 @@ export default {
             if (this.userIsAdmin) {
                 menu.push(...[
                     {path: 'system', name: '系统设置', divided: true},
-                    {path: 'license', name: 'License Key'},
+                    // {path: 'license', name: 'License Key'},
                 ])
             }
             menu.push(...[
-                {path: 'version', name: '更新日志', divided: true},
-                {path: 'version-show', name: '版本'},
+                // {path: 'version', name: '更新日志', divided: true},
+                // {path: 'version-show', name: '版本'},
                 {path: 'clearCache', name: '清除缓存', divided: true},
                 {path: 'logout', name: '退出登录'},
             ])

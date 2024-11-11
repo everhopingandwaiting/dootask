@@ -28,3 +28,6 @@ vars.yaml
 laravels.conf
 laravels.pid
 README_LOCAL.md
+
+/public/mind-map
+/public/js/build

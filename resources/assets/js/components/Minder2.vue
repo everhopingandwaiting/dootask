@@ -201,7 +201,7 @@
 <script>
     import IFrame from "../pages/manage/components/IFrame.vue";
     export default {
-        name: 'mind-editor',
+        name: 'mind2-editor',
         components: {IFrame},
         props: {
             value: {
@@ -307,8 +307,7 @@
         },
         computed: {
             url() {
-                // return $A.mainUrl(`minder/index.html?type=manual&readonly=${this.readOnly ? 'yes' : 'no'}`)
-                return $A.mainUrl(`/mind-map/index.html#/?type=manual&readonly=${this.readOnly ? 'yes' : 'no'}`)
+                return $A.mainUrl(`minder/index.html?type=manual&readonly=${this.readOnly ? 'yes' : 'no'}`)
             }
         },
         watch: {
@@ -331,7 +330,7 @@
                         }
                     }
                     if (typeof json.theme !== "string") {
-                        json.theme = json.theme?.template || "fresh-blue";
+                        json.theme = "fresh-blue";
                     }
                     if (typeof json.template !== "string") {
                         json.template = "default";

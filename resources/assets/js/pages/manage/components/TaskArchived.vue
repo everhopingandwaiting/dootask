@@ -153,7 +153,7 @@ export default {
                                 style: {
                                     fontSize: '13px',
                                     cursor: 'pointer',
-                                    color: '#84C56A',
+                                    color: '#3b51b4',
                                 },
                                 on: {
                                     'click': () => {
@@ -176,7 +176,7 @@ export default {
                                     marginLeft: '6px',
                                     fontSize: '13px',
                                     cursor: 'pointer',
-                                    color: '#84C56A',
+                                    color: '#3b51b4',
                                 },
                                 on: {
                                     'on-ok': () => {

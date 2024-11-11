@@ -637,9 +637,9 @@ export default {
                 array.push(...[
                     {path: 'personal', name: '个人设置', divided: true},
                     {path: 'system', name: '系统设置'},
-                    {path: 'license', name: 'License Key'},
+                    // {path: 'license', name: 'License Key'},
 
-                    {path: 'version', name: '更新版本', divided: true, visible: !!this.clientNewVersion},
+                    // {path: 'version', name: '更新版本', divided: true, visible: !!this.clientNewVersion},
 
                     {path: 'allProject', name: '所有项目', divided: true},
                     {path: 'archivedProject', name: '已归档的项目'},
